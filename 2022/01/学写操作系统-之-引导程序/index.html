@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+
+
+<html lang="zh-CN">
+  
+
+    <head>
+      <meta charset="utf-8" />
+        
+      <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1"
+      />
+      <title>学写操作系统 之 引导程序 |  0xtiger5&#39;s Blog</title>
+  <meta name="generator" content="hexo-theme-ayer">
+      
+      <link rel="shortcut icon" href="/favicon.ico" />
+       
+<link rel="stylesheet" href="/dist/main.css">
+
+      
+<link rel="stylesheet" href="/css/fonts/remixicon.css">
+
+      
+<link rel="stylesheet" href="/css/custom.css">
+ 
+      <script src="https://cdn.staticfile.org/pace/1.2.4/pace.min.js"></script>
+       
+ 
+
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-bulma@5.0.1/bulma.min.css"
+      />
+      <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.19/dist/sweetalert2.min.js"></script>
+
+      <!-- mermaid -->
+      
+      <style>
+        .swal2-styled.swal2-confirm {
+          font-size: 1.6rem;
+        }
+      </style>
+    </head>
+  </html>
+</html>
+
+
+<body>
+  <div id="app">
+    
+      
+    <main class="content on">
+      <section class="outer">
+  <article
+  id="post-学写操作系统-之-引导程序"
+  class="article article-type-post"
+  itemscope
+  itemprop="blogPost"
+  data-scroll-reveal
+>
+  <div class="article-inner">
+    
+    <header class="article-header">
+       
+<h1 class="article-title sea-center" style="border-left:0" itemprop="name">
+  学写操作系统 之 引导程序
+</h1>
+ 
+
+      
+    </header>
+     
+    <div class="article-meta">
+      <a href="/2022/01/%E5%AD%A6%E5%86%99%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E4%B9%8B-%E5%BC%95%E5%AF%BC%E7%A8%8B%E5%BA%8F/" class="article-date">
+  <time datetime="2022-01-25T00:53:40.000Z" itemprop="datePublished">2022-01-25</time>
+</a> 
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/OS/">OS</a> / <a class="article-category-link" href="/categories/OS/%E7%94%B0%E5%AE%87%E7%9A%84%E4%B9%A6/">田宇的书</a>
+  </div>
+  
+<div class="word_count">
+    <span class="post-time">
+        <span class="post-meta-item-icon">
+            <i class="ri-quill-pen-line"></i>
+            <span class="post-meta-item-text"> 字数统计:</span>
+            <span class="post-count">6.3k</span>
+        </span>
+    </span>
+
+    <span class="post-time">
+        &nbsp; | &nbsp;
+        <span class="post-meta-item-icon">
+            <i class="ri-book-open-line"></i>
+            <span class="post-meta-item-text"> 阅读时长≈</span>
+            <span class="post-count">28 分钟</span>
+        </span>
+    </span>
+</div>
+ 
+    </div>
+      
+    <div class="tocbot"></div>
+
+
+
+
+  
+    <div class="article-entry" itemprop="articleBody">
+       
+  <p>参考书：《一个64位操作系统的设计与实现》 田宇 著</p>
+<p>环境：CentOS7 + Bochs-2.6.8</p>
+<h3 id="铺垫"><a href="#铺垫" class="headerlink" title="铺垫"></a>铺垫</h3><p>开机按钮按下，BIOS自检设备。自检结束，根据启动项的设置去检查磁盘。为了入门简单，这里的磁盘指的是相对简单但是已经被淘汰的软盘。BIOS检测软盘的第0磁头第0磁道第1扇区是否以0x55和0xaa这两个字节作为结尾（为什么是这两个，我不太清楚，也没有找到太权威的答案）。如果是，那么 BIOS就认为这个扇区是一个引导扇区，进而把这个扇区的内容复制到物理内存地址0x7c00处，随后处理器跳转至0x7c00地址处执行一条条的指令，我们放在软盘第0磁头第0磁道第1扇区的Boot引导程序就被执行了。我们知道，一个扇区512B容量比较小，所以Boot引导程序只能作为“一级助推器”，将功能更加强大的引导加载程序Loader装载到内存中。所以这篇引导程序有两个，一个是Boot，一个是Loader。</p>
+<h4 id="一些参考："><a href="#一些参考：" class="headerlink" title="一些参考："></a>一些参考：</h4><p><a target="_blank" rel="noopener" href="https://blog.csdn.net/smallmuou/article/details/6796867">软盘结构及软盘数据的读取-CSDN</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1464y1T7Qv/">移动软盘驱动器拆解-B站</a></p>
+<span id="more"></span>
+
+<h3 id="Boot引导程序"><a href="#Boot引导程序" class="headerlink" title="Boot引导程序"></a>Boot引导程序</h3><p>源代码可以在<a target="_blank" rel="noopener" href="https://m.ituring.com.cn/book/2450">这里</a>下载</p>
+<blockquote>
+<p>然后渲染博客时markdown汇编代码段语法高亮好像没办法渲染出来。</p>
+</blockquote>
+<h4 id="版本1"><a href="#版本1" class="headerlink" title="版本1"></a>版本1</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line">;篇幅有限，删去了源文件中的版权声明。版权归原作者，仅供学习交流使用</span><br><span class="line"></span><br><span class="line">	org	0x7c00</span><br><span class="line">    ;告诉编译器程序的起始地址，影响绝对地址的寻址指令</span><br><span class="line"></span><br><span class="line">BaseOfStack	equ	0x7c00</span><br><span class="line">;equ 伪指令，等价语句，将标识符BaseOfStack等价为数值0x7c00</span><br><span class="line"></span><br><span class="line">Label_Start:</span><br><span class="line">;开始时的下面几行：</span><br><span class="line">;设置ds, es, ss, sp寄存器的内容。(代码段 数据段 扩展段 栈段 栈指针)寄存器（前4个存基地址的）</span><br><span class="line">	mov	ax,	cs	</span><br><span class="line">	mov	ds,	ax</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	ss,	ax</span><br><span class="line">	mov	sp,	BaseOfStack</span><br><span class="line"></span><br><span class="line">;=======	clear screen</span><br><span class="line">;通过调用INT 10h中断实现清屏功能</span><br><span class="line">;先设置必要的寄存器参数然后调用BIOS中断服务程序</span><br><span class="line"></span><br><span class="line">	mov	ax,	0600h ;AH=06h: 按指定范围滚动窗口；AL=00h: 滚动的列数，为0则清屏</span><br><span class="line">	mov	bx,	0700h ;清屏时，BX, CX, DX寄存器将不起作用</span><br><span class="line">	mov	cx,	0</span><br><span class="line">	mov	dx,	0184fh</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	set focus</span><br><span class="line"></span><br><span class="line">	mov	ax,	0200h ;AH=02h: 设定光标位置</span><br><span class="line">	mov	bx,	0000h ;BH=00h: 页码</span><br><span class="line">	mov	dx,	0000h ;DH:DL=00h:00h: 0列0行</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	display on screen : Start Booting......</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h ;AH=13h: 显示一行字符串 AL=01h: 字符串属性由BL提供，显示后光标移到字符串尾端</span><br><span class="line">	mov	bx,	000fh ;0页 白色字体高亮度背景黑字体不闪烁</span><br><span class="line">	mov	dx,	0000h ;游标坐标0行0列</span><br><span class="line">	mov	cx,	10	  ;字符串长度10</span><br><span class="line">	push	ax	  ;两个段寄存器之间不能直接传送</span><br><span class="line">	mov	ax,	ds		</span><br><span class="line">	mov	es,	ax		;设置es为数据段基地址</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	StartBootMessage 	;设置bp为消息在数据段的偏移地址</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	reset floppy</span><br><span class="line">;重置软驱：将磁盘驱动器磁头移动至默认位置，在这里没啥实际作用</span><br><span class="line"></span><br><span class="line">	xor	ah,	ah ;AH=00h</span><br><span class="line">	xor	dl,	dl ;DL=00h :第一个软盘驱动器</span><br><span class="line">	int	13h</span><br><span class="line"></span><br><span class="line">	jmp	$	;死循环，$在NASM编译器中表示当前行被编译后的地址</span><br><span class="line"></span><br><span class="line">StartBootMessage:	db	&quot;Start Boot&quot;</span><br><span class="line"></span><br><span class="line">;=======	fill zero until whole sector</span><br><span class="line"></span><br><span class="line">	times	510 - ($ - $$)	db	0 ;在后面添满0，$$表示当前Section的地址（目前只有一个Section）。</span><br><span class="line">	dw	0xaa55					  ;最后用0x55 和 0xaa结尾，写成0xaa55是因为dw是小端序</span><br></pre></td></tr></table></figure>
+
+<p>我们看到版本1非常简单，仅仅是加载程序输出一句话而已。下面看版本2，将Loader加载到内存。</p>
+<p>去软盘里找Loader程序，如果Loader程序在固定扇区，虽然一时好找，但是后面使用软盘（内核）也必须使用固定扇区，这会对开发和维护造成极大不便（每次更新程序，写入软盘都要重新计算其实扇区和占用扇区数，如果要使用其他文件资源就更加不方便了），所以我们选择将Loader程序加载到文件系统中。这里为了方便入门，选择了淘汰的FAT12软盘型文件系统，后面我们再了解FAT32文件系统。</p>
+<p>FAT12文件系统将软盘分为4部分：引导扇区、FAT表、根目录区、数据区。详情在书中P40开始，感兴趣也可自行查阅资料。</p>
+<h4 id="版本2"><a href="#版本2" class="headerlink" title="版本2"></a>版本2</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br><span class="line">248</span><br><span class="line">249</span><br><span class="line">250</span><br><span class="line">251</span><br><span class="line">252</span><br><span class="line">253</span><br><span class="line">254</span><br><span class="line">255</span><br><span class="line">256</span><br><span class="line">257</span><br><span class="line">258</span><br><span class="line">259</span><br><span class="line">260</span><br><span class="line">261</span><br><span class="line">262</span><br><span class="line">263</span><br><span class="line">264</span><br><span class="line">265</span><br><span class="line">266</span><br><span class="line">267</span><br><span class="line">268</span><br><span class="line">269</span><br><span class="line">270</span><br><span class="line">271</span><br><span class="line">272</span><br><span class="line">273</span><br><span class="line">274</span><br><span class="line">275</span><br><span class="line">276</span><br><span class="line">277</span><br><span class="line">278</span><br><span class="line">279</span><br><span class="line">280</span><br><span class="line">281</span><br><span class="line">282</span><br><span class="line">283</span><br><span class="line">284</span><br><span class="line">285</span><br><span class="line">286</span><br><span class="line">287</span><br><span class="line">288</span><br><span class="line">289</span><br><span class="line">290</span><br><span class="line">291</span><br><span class="line">292</span><br><span class="line">293</span><br><span class="line">294</span><br><span class="line">295</span><br><span class="line">296</span><br><span class="line">297</span><br><span class="line">298</span><br><span class="line">299</span><br><span class="line">300</span><br><span class="line">301</span><br><span class="line">302</span><br><span class="line">303</span><br><span class="line">304</span><br><span class="line">305</span><br><span class="line">306</span><br><span class="line">307</span><br><span class="line">308</span><br><span class="line">309</span><br><span class="line">310</span><br><span class="line">311</span><br><span class="line">312</span><br><span class="line">313</span><br><span class="line">314</span><br><span class="line">315</span><br><span class="line">316</span><br><span class="line">317</span><br><span class="line">318</span><br><span class="line">319</span><br><span class="line">320</span><br><span class="line">321</span><br></pre></td><td class="code"><pre><span class="line">;篇幅有限，删去了源文件中的版权声明。版权归原作者，仅供学习交流使用</span><br><span class="line"></span><br><span class="line">	org	0x7c00	</span><br><span class="line"></span><br><span class="line">BaseOfStack	equ	0x7c00</span><br><span class="line"></span><br><span class="line">;下面两个是准备将Loader放在缓冲区的位置。</span><br><span class="line">BaseOfLoader	equ	0x1000	;基地址</span><br><span class="line">OffsetOfLoader	equ	0x00	;偏移量  实模式地址变换公式: Addr = Base &lt;&lt; 4 + Offset</span><br><span class="line"></span><br><span class="line">RootDirSectors	equ	14		;根目录占用的扇区数，根据FAT12信息算出来的</span><br><span class="line">SectorNumOfRootDirStart	equ	19	;根目录起始扇区号，算出来的</span><br><span class="line"></span><br><span class="line">SectorNumOfFAT1Start	equ	1	;FAT1表的起始扇区号，0是保留扇区（引导扇区）</span><br><span class="line">SectorBalance	equ	17			;19-2（这里每簇Cluster一个扇区Sector）</span><br><span class="line"></span><br><span class="line">	;下面的部分对应引导扇区的代码前面的部分，是一些FAT12文件系统的信息。共62B</span><br><span class="line">	jmp	short Label_Start</span><br><span class="line">	nop</span><br><span class="line">	BS_OEMName	db	&#x27;MINEboot&#x27;</span><br><span class="line">	BPB_BytesPerSec	dw	512</span><br><span class="line">	BPB_SecPerClus	db	1</span><br><span class="line">	BPB_RsvdSecCnt	dw	1</span><br><span class="line">	BPB_NumFATs	db	2</span><br><span class="line">	BPB_RootEntCnt	dw	224</span><br><span class="line">	BPB_TotSec16	dw	2880</span><br><span class="line">	BPB_Media	db	0xf0</span><br><span class="line">	BPB_FATSz16	dw	9</span><br><span class="line">	BPB_SecPerTrk	dw	18</span><br><span class="line">	BPB_NumHeads	dw	2</span><br><span class="line">	BPB_HiddSec	dd	0</span><br><span class="line">	BPB_TotSec32	dd	0</span><br><span class="line">	BS_DrvNum	db	0</span><br><span class="line">	BS_Reserved1	db	0</span><br><span class="line">	BS_BootSig	db	0x29</span><br><span class="line">	BS_VolID	dd	0</span><br><span class="line">	BS_VolLab	db	&#x27;boot loader&#x27;</span><br><span class="line">	BS_FileSysType	db	&#x27;FAT12   &#x27;</span><br><span class="line"></span><br><span class="line">Label_Start:</span><br><span class="line">;这个标签下的代码和版本1相同</span><br><span class="line">	mov	ax,	cs</span><br><span class="line">	mov	ds,	ax</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	ss,	ax</span><br><span class="line">	mov	sp,	BaseOfStack</span><br><span class="line"></span><br><span class="line">;=======	clear screen</span><br><span class="line"></span><br><span class="line">	mov	ax,	0600h</span><br><span class="line">	mov	bx,	0700h</span><br><span class="line">	mov	cx,	0</span><br><span class="line">	mov	dx,	0184fh</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	set focus</span><br><span class="line"></span><br><span class="line">	mov	ax,	0200h</span><br><span class="line">	mov	bx,	0000h</span><br><span class="line">	mov	dx,	0000h</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	display on screen : Start Booting......</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000fh</span><br><span class="line">	mov	dx,	0000h</span><br><span class="line">	mov	cx,	10</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	StartBootMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	reset floppy</span><br><span class="line"></span><br><span class="line">	xor	ah,	ah</span><br><span class="line">	xor	dl,	dl</span><br><span class="line">	int	13h</span><br><span class="line"></span><br><span class="line">;=======	search loader.bin</span><br><span class="line">	mov	word	[SectorNo],	SectorNumOfRootDirStart ;保存根目录的起始扇区号，作为寻找的起点</span><br><span class="line"></span><br><span class="line">Lable_Search_In_Root_Dir_Begin:</span><br><span class="line"></span><br><span class="line">	cmp	word	[RootDirSizeForLoop],	0</span><br><span class="line">	jz	Label_No_LoaderBin</span><br><span class="line">	dec	word	[RootDirSizeForLoop]	;上面3行加上某处的跳转是一个循环，[RootDirSizeForLoop]初始是RootDirSectors，根目录的扇区数，然后不断自减1，每次循环遍历一个扇区。</span><br><span class="line">	</span><br><span class="line">	mov	ax,	00h</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	bx,	8000h</span><br><span class="line">	mov	ax,	[SectorNo]	;这里初始值是正确的，后面在Label_Goto_Next_Sector_In_Root_Dir会+1</span><br><span class="line">	mov	cl,	1</span><br><span class="line">	call	Func_ReadOneSector</span><br><span class="line">	;从软盘里读一个扇区放到内存</span><br><span class="line">	;前面几行是参数</span><br><span class="line">	;AX=待读取的磁盘起始扇区号 CL=读入的扇区数量 ES:BX=&gt;目标缓冲区起始地址</span><br><span class="line">	mov	si,	LoaderFileName	;这样[DS:SI]就是[LoaderFileName]了</span><br><span class="line">	mov	di,	8000h	;因为缓冲区从8000h开始</span><br><span class="line">	cld		;据说是清DF标志位，因为后面的LODSB指令与DF有关</span><br><span class="line">	;所以说上面3行是在为LODSB和比较做准备，下面是两层循环</span><br><span class="line">	mov	dx,	10h		;一个目录项32B，一个扇区512B里有16个，计数dx=10h</span><br><span class="line">	</span><br><span class="line">Label_Search_For_LoaderBin:</span><br><span class="line"></span><br><span class="line">	cmp	dx,	0</span><br><span class="line">	jz	Label_Goto_Next_Sector_In_Root_Dir</span><br><span class="line">	dec	dx</span><br><span class="line">	;上面的循环遍历一个扇区的所有目录项，遍历完了没找到就跳转。</span><br><span class="line">	mov	cx,	11		;文件名8B，扩展名3B，一共需要比较11B的内容</span><br><span class="line"></span><br><span class="line">Label_Cmp_FileName:</span><br><span class="line"></span><br><span class="line">	cmp	cx,	0</span><br><span class="line">	jz	Label_FileName_Found</span><br><span class="line">	dec	cx</span><br><span class="line">	;上面的循环遍历一个文件名+扩展名的11字节，都没发现不同就说明找到了 :)</span><br><span class="line">	lodsb	;从DS:SI指定的内存地址中读取数据到AL中，SI寄存器自动增减数据长度(这里是1B，DF=0增加反之减少)</span><br><span class="line">	cmp	al,	byte	[es:di]		;al是模板，[es:di]是从内存取的，es就是0了。</span><br><span class="line">	jz	Label_Go_On</span><br><span class="line">	jmp	Label_Different		</span><br><span class="line"></span><br><span class="line">Label_Go_On:</span><br><span class="line">	;相同则继续比较下一位，al不用处理因为lodsb自动处理了，di加一</span><br><span class="line">	inc	di</span><br><span class="line">	jmp	Label_Cmp_FileName</span><br><span class="line"></span><br><span class="line">Label_Different:</span><br><span class="line">	;不同则换扇区中的下一个目录项</span><br><span class="line">	and	di,	0ffe0h	;0x0ffe0 = 0b_0000_1111_1111_1110_0000，所以and是清零低5位，这5位描述一个目录项中的具体位置。</span><br><span class="line">	add	di,	20h		;0x00020 = 0b_0000_0000_0000_0010_0000，一个目录项32B，在bit6加1跳到下一个目录项。</span><br><span class="line">	mov	si,	LoaderFileName	;之前lodsb会更改si的值，这里复位</span><br><span class="line">	jmp	Label_Search_For_LoaderBin</span><br><span class="line"></span><br><span class="line">Label_Goto_Next_Sector_In_Root_Dir:</span><br><span class="line">	;扇区的目录项遍历完了会调到这里，扇区号加一，遍历下一个扇区</span><br><span class="line">	add	word	[SectorNo],	1</span><br><span class="line">	jmp	Lable_Search_In_Root_Dir_Begin</span><br><span class="line">	</span><br><span class="line">;=======	display on screen : ERROR:No LOADER Found</span><br><span class="line"></span><br><span class="line">Label_No_LoaderBin:</span><br><span class="line">	;根目录区所有目录项都找遍了，没找到Loader.bin, 利用INT 10h AH=13h 屏幕打印错误信息</span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	008ch</span><br><span class="line">	mov	dx,	0100h</span><br><span class="line">	mov	cx,	21</span><br><span class="line">	push	ax		;两个段寄存器之间不能直接传送</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	NoLoaderMessage</span><br><span class="line">	int	10h</span><br><span class="line">	jmp	$	;死循环</span><br><span class="line"></span><br><span class="line">;=======	found loader.bin name in root director struct</span><br><span class="line"></span><br><span class="line">Label_FileName_Found:</span><br><span class="line">	;找到了</span><br><span class="line">	mov	ax,	RootDirSectors	;ax放入根目录占用的扇区数</span><br><span class="line">	and	di,	0ffe0h	;0x0ffe0 = 0b_0000_1111_1111_1110_0000；di是当前目录项的位置，and得到基地址</span><br><span class="line">	add	di,	01ah	;0x01a = 26，add得到起始簇号的位置</span><br><span class="line">	mov	cx,	word	[es:di]	;把起始簇号读到cx中</span><br><span class="line">	push	cx		;压栈保存文件的起始簇号</span><br><span class="line">	add	cx,	ax		;因为这个软盘1簇就是1扇区，所以可以直接相加</span><br><span class="line">	add	cx,	SectorBalance</span><br><span class="line">	;上面这两行计算数据区的扇区地址</span><br><span class="line">	mov	ax,	BaseOfLoader</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	bx,	OffsetOfLoader</span><br><span class="line">	;es放基地址，bx放偏移作为Func_ReadOneSector的参数</span><br><span class="line">	mov	ax,	cx ;ax放入扇区地址作为Func_ReadOneSector的参数</span><br><span class="line"></span><br><span class="line">Label_Go_On_Loading_File:</span><br><span class="line">	push	ax</span><br><span class="line">	push	bx</span><br><span class="line">	mov	ah,	0eh</span><br><span class="line">	mov	al,	&#x27;.&#x27;	;待显示字符是一个点</span><br><span class="line">	mov	bl,	0fh	;白色高亮背景黑不闪烁</span><br><span class="line">	int	10h	;INT 10h, AH=0Eh 在屏幕上显示一个字符</span><br><span class="line">	pop	bx</span><br><span class="line">	pop	ax</span><br><span class="line">	;</span><br><span class="line"></span><br><span class="line">	mov	cl,	1	;读1个扇区</span><br><span class="line">	call	Func_ReadOneSector	;缓冲区在ES:BX</span><br><span class="line">	pop	ax	;之前有一个push cx, 压栈保存文件的起始簇号，这里把它弹栈放在ax里，后面有push ax，同样是保存文件的一个簇号。</span><br><span class="line">	</span><br><span class="line">	call	Func_GetFATEntry	;看下一个簇号</span><br><span class="line">	cmp	ax,	0fffh</span><br><span class="line">	jz	Label_File_Loaded		;如果下一个簇号是0fffh，说明加载完毕了</span><br><span class="line">	push	ax					;保存下一个簇号</span><br><span class="line">	mov	dx,	RootDirSectors		;根目录占用扇区数</span><br><span class="line">	add	ax,	dx</span><br><span class="line">	add	ax,	SectorBalance</span><br><span class="line">	;算下一个簇号所在的扇区位置，作为Func_ReadOneSector的参数</span><br><span class="line">	add	bx,	[BPB_BytesPerSec]	;缓冲区输出指针后移一个簇</span><br><span class="line">	jmp	Label_Go_On_Loading_File</span><br><span class="line"></span><br><span class="line">Label_File_Loaded:</span><br><span class="line">	</span><br><span class="line">	jmp	BaseOfLoader:OffsetOfLoader</span><br><span class="line">	;这是段间地址跳转，从当前段跳到另一个段中。</span><br><span class="line">	;必须明确指定目标段BaseOfLoader和目标段内偏移地址OffsetOfLoader</span><br><span class="line"></span><br><span class="line">;=======	read one sector from floppy</span><br><span class="line">;从软盘里读一个扇区放到内存，函数，是对INT 13h的一个封装。</span><br><span class="line">;	AX=待读取的磁盘起始扇区号 CL=读入的扇区数量 ES:BX=&gt;目标缓冲区起始地址</span><br><span class="line">;INT 13h, AH=02h：读取磁盘扇区</span><br><span class="line">;	AL=读入的扇区数 CH:CL=&gt;磁道号(柱面号)低8位:扇区号1~63(bit0~5)磁道号(柱面号)高2位(bit6~7，只对硬盘有效)</span><br><span class="line">;	DH:DL=&gt;磁头号:驱动器号(如果操作的是磁盘驱动器，bit7必须被置位)</span><br><span class="line">;	ES:BX=&gt;数据缓冲区</span><br><span class="line">;所以这个函数完成从Logical Block Address到Cylinder/Head/Sector的地址转换</span><br><span class="line">;转换公式：LBA = 2*C*N + H*N + S - 1 其中LBA, C, H, S在上一行，N是每个磁道的扇区数。</span><br><span class="line">;所以先做除法，然后根据余数和商得到C/H/S</span><br><span class="line">;</span><br><span class="line">Func_ReadOneSector:</span><br><span class="line">	;调用函数之前，AX, CL, ES:BX是就位的，这一点需要注意</span><br><span class="line">	push	bp</span><br><span class="line">	mov	bp,	sp</span><br><span class="line">	sub	esp,	2</span><br><span class="line">	;还是关于调用多写一些东西吧。上面这三行完成了两件事情：保存上一个过程的现场 和 为这个过程开辟栈地址空间</span><br><span class="line">	;push指令将上一个过程的bp压栈(bp指向一个过程的栈地址空间中的“底部”，标识这个过程的一些数据在栈地址空间的位置)</span><br><span class="line">	;mov指令将指向栈顶的地址（栈指针）sp赋给bp，作为这个过程的“底部”</span><br><span class="line">	;sub指令将栈指针esp（sp的32位扩展）减2，这样就有了可以存东西的空间（可以用bp表示）</span><br><span class="line">	mov	byte	[bp - 2],	cl</span><br><span class="line">	;将CL存在我们开辟的空间中，因为输入的CL和输出的CL完全不一样，现在先保存一下数值。</span><br><span class="line">	push	bx</span><br><span class="line">	;先借用一下bx寄存器，所以先压栈，后面pop的时候再把值还给bx</span><br><span class="line">	mov	bl,	[BPB_SecPerTrk]</span><br><span class="line">	div	bl	;ax/bl 16位/8位 result: AH:AL=&gt;余数:商</span><br><span class="line">	;上面这两行就是“先做除法”</span><br><span class="line">	inc	ah</span><br><span class="line">	mov	cl,	ah</span><br><span class="line">	;余数自加一得到扇区号放在cl，目前我们用的是软盘，高位不用管</span><br><span class="line">	mov	dh,	al</span><br><span class="line">	shr	al,	1</span><br><span class="line">	mov	ch,	al</span><br><span class="line">	and	dh,	1</span><br><span class="line">	;四行做了两件事：商右移1位得到磁道号放在ch 和 商取最低位看看是磁头是0还是1放在dh(实际是先放在dh然后再过滤最低位)</span><br><span class="line">	pop	bx</span><br><span class="line">	mov	dl,	[BS_DrvNum]</span><br><span class="line">	;dl放驱动器号</span><br><span class="line">Label_Go_On_Reading:</span><br><span class="line">	mov	ah,	2</span><br><span class="line">	mov	al,	byte	[bp - 2]</span><br><span class="line">	;设置ah和al</span><br><span class="line">	int	13h</span><br><span class="line">	jc	Label_Go_On_Reading</span><br><span class="line">	;没读取成功，进位CF为1，就跳转到上面继续读，读取成功CF复位0就继续执行下面的指令</span><br><span class="line">	add	esp,	2</span><br><span class="line">	pop	bp</span><br><span class="line">	;上面两行相当于leave</span><br><span class="line">	ret</span><br><span class="line"></span><br><span class="line">;=======	get FAT Entry</span><br><span class="line"></span><br><span class="line">Func_GetFATEntry:</span><br><span class="line">	;解析FAT表项，根据当前FAT表项索引出下一个表项</span><br><span class="line">	;AX=FAT表项号（I/O）</span><br><span class="line">	push	es</span><br><span class="line">	push	bx</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	00</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	byte	[Odd],	0</span><br><span class="line">	mov	bx,	3</span><br><span class="line">	mul	bx	;这里16位乘法，高位在DX中保存（实际上因为表项号范围较小，高位DX这时为0）</span><br><span class="line">	mov	bx,	2</span><br><span class="line">	div	bx	;除以16位bx，实际上是DX:AX为被除数。结果DX保存余数，AX保存商。</span><br><span class="line">	;这里乘3除2的原因是，FAT12中，每个表项12bit=1.5B，为了得到表项号的确切位置，我们这样操作。</span><br><span class="line">	;如果刚好整除（偶），那么最后的商就是相应的字节位置。</span><br><span class="line">	;如果没被整除（奇），那么最后的商并不是相应的字节位置，还需要下数半个字节</span><br><span class="line">	cmp	dx,	0	;用余数判断奇偶</span><br><span class="line">	jz	Label_Even</span><br><span class="line">	mov	byte	[Odd],	1</span><br><span class="line">	;如果是偶，则跳过这一行，标记位[Odd]是0；反之[Odd]设为1</span><br><span class="line">Label_Even:</span><br><span class="line">	</span><br><span class="line">	xor	dx,	dx	;DX清零，因为下面的DIV需要用到这个寄存器</span><br><span class="line">	mov	bx,	[BPB_BytesPerSec]	;读取每扇区的字节数放在BX里</span><br><span class="line">	div	bx	; DX:AX/BX 字节位置/每扇区字节数 得到 偏移扇区号(AX)和扇区中偏移位置(DX) </span><br><span class="line">	push	dx</span><br><span class="line">	;先不管扇区偏移位置，我们先读扇区。</span><br><span class="line">	;考虑到可能跨扇区(512不能被1.5整除)，我们靠Func_ReadOneSector读出2个扇区</span><br><span class="line">	mov	bx,	8000h	;输出缓冲区位置</span><br><span class="line">	add	ax,	SectorNumOfFAT1Start	;扇区地址 = FAT1表基地址 + 扇区偏移</span><br><span class="line">	mov	cl,	2</span><br><span class="line">	call	Func_ReadOneSector</span><br><span class="line">	pop	dx</span><br><span class="line">	add	bx,	dx	;字节位置 = 缓冲区基地址 + 字节位置偏移</span><br><span class="line">	mov	ax,	[es:bx]	;这个es一开始就是0不用管它，先从bx处读2字节</span><br><span class="line">	cmp	byte	[Odd],	1	;判断奇偶</span><br><span class="line">	jnz	Label_Even_2	;偶跳转</span><br><span class="line">	shr	ax,	4	;奇右移4位，因为低位在“右边”</span><br><span class="line"></span><br><span class="line">Label_Even_2:</span><br><span class="line">	and	ax,	0fffh		;然后直接取最低12bit</span><br><span class="line">	pop	bx</span><br><span class="line">	pop	es</span><br><span class="line">	ret</span><br><span class="line"></span><br><span class="line">;=======	tmp variable</span><br><span class="line"></span><br><span class="line">RootDirSizeForLoop	dw	RootDirSectors</span><br><span class="line">SectorNo		dw	0</span><br><span class="line">Odd			db	0</span><br><span class="line"></span><br><span class="line">;=======	display messages</span><br><span class="line"></span><br><span class="line">StartBootMessage:	db	&quot;Start Boot&quot;</span><br><span class="line">NoLoaderMessage:	db	&quot;ERROR:No LOADER Found&quot;</span><br><span class="line">LoaderFileName:		db	&quot;LOADER  BIN&quot;,0	;8B文件名 3B扩展名，0就是字符串\0结尾，因为我们限制了长度11B，所以没有考虑&#x27;\0&#x27;</span><br><span class="line"></span><br><span class="line">;=======	fill zero until whole sector</span><br><span class="line"></span><br><span class="line">	times	510 - ($ - $$)	db	0</span><br><span class="line">	dw	0xaa55</span><br></pre></td></tr></table></figure>
+
+<h3 id="Loader引导程序"><a href="#Loader引导程序" class="headerlink" title="Loader引导程序"></a>Loader引导程序</h3><p>书上有一个简版的Loader程序用以测试上面的boot，我觉得没啥意思，直接上正式版，有点长，700多行。。</p>
+<blockquote>
+<p>参考：<br><a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s/VGhpbZaeyVwq3Ghs2E6eEw">从实模式到保护模式</a><br><a target="_blank" rel="noopener" href="https://blog.csdn.net/baidu_31504167/article/details/100982379">0x66和0x67前缀</a><br><a target="_blank" rel="noopener" href="https://blog.csdn.net/weixin_42707324/article/details/108306596">INT 15h AX&#x3D;E820h用法</a></p>
+</blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br><span class="line">248</span><br><span class="line">249</span><br><span class="line">250</span><br><span class="line">251</span><br><span class="line">252</span><br><span class="line">253</span><br><span class="line">254</span><br><span class="line">255</span><br><span class="line">256</span><br><span class="line">257</span><br><span class="line">258</span><br><span class="line">259</span><br><span class="line">260</span><br><span class="line">261</span><br><span class="line">262</span><br><span class="line">263</span><br><span class="line">264</span><br><span class="line">265</span><br><span class="line">266</span><br><span class="line">267</span><br><span class="line">268</span><br><span class="line">269</span><br><span class="line">270</span><br><span class="line">271</span><br><span class="line">272</span><br><span class="line">273</span><br><span class="line">274</span><br><span class="line">275</span><br><span class="line">276</span><br><span class="line">277</span><br><span class="line">278</span><br><span class="line">279</span><br><span class="line">280</span><br><span class="line">281</span><br><span class="line">282</span><br><span class="line">283</span><br><span class="line">284</span><br><span class="line">285</span><br><span class="line">286</span><br><span class="line">287</span><br><span class="line">288</span><br><span class="line">289</span><br><span class="line">290</span><br><span class="line">291</span><br><span class="line">292</span><br><span class="line">293</span><br><span class="line">294</span><br><span class="line">295</span><br><span class="line">296</span><br><span class="line">297</span><br><span class="line">298</span><br><span class="line">299</span><br><span class="line">300</span><br><span class="line">301</span><br><span class="line">302</span><br><span class="line">303</span><br><span class="line">304</span><br><span class="line">305</span><br><span class="line">306</span><br><span class="line">307</span><br><span class="line">308</span><br><span class="line">309</span><br><span class="line">310</span><br><span class="line">311</span><br><span class="line">312</span><br><span class="line">313</span><br><span class="line">314</span><br><span class="line">315</span><br><span class="line">316</span><br><span class="line">317</span><br><span class="line">318</span><br><span class="line">319</span><br><span class="line">320</span><br><span class="line">321</span><br><span class="line">322</span><br><span class="line">323</span><br><span class="line">324</span><br><span class="line">325</span><br><span class="line">326</span><br><span class="line">327</span><br><span class="line">328</span><br><span class="line">329</span><br><span class="line">330</span><br><span class="line">331</span><br><span class="line">332</span><br><span class="line">333</span><br><span class="line">334</span><br><span class="line">335</span><br><span class="line">336</span><br><span class="line">337</span><br><span class="line">338</span><br><span class="line">339</span><br><span class="line">340</span><br><span class="line">341</span><br><span class="line">342</span><br><span class="line">343</span><br><span class="line">344</span><br><span class="line">345</span><br><span class="line">346</span><br><span class="line">347</span><br><span class="line">348</span><br><span class="line">349</span><br><span class="line">350</span><br><span class="line">351</span><br><span class="line">352</span><br><span class="line">353</span><br><span class="line">354</span><br><span class="line">355</span><br><span class="line">356</span><br><span class="line">357</span><br><span class="line">358</span><br><span class="line">359</span><br><span class="line">360</span><br><span class="line">361</span><br><span class="line">362</span><br><span class="line">363</span><br><span class="line">364</span><br><span class="line">365</span><br><span class="line">366</span><br><span class="line">367</span><br><span class="line">368</span><br><span class="line">369</span><br><span class="line">370</span><br><span class="line">371</span><br><span class="line">372</span><br><span class="line">373</span><br><span class="line">374</span><br><span class="line">375</span><br><span class="line">376</span><br><span class="line">377</span><br><span class="line">378</span><br><span class="line">379</span><br><span class="line">380</span><br><span class="line">381</span><br><span class="line">382</span><br><span class="line">383</span><br><span class="line">384</span><br><span class="line">385</span><br><span class="line">386</span><br><span class="line">387</span><br><span class="line">388</span><br><span class="line">389</span><br><span class="line">390</span><br><span class="line">391</span><br><span class="line">392</span><br><span class="line">393</span><br><span class="line">394</span><br><span class="line">395</span><br><span class="line">396</span><br><span class="line">397</span><br><span class="line">398</span><br><span class="line">399</span><br><span class="line">400</span><br><span class="line">401</span><br><span class="line">402</span><br><span class="line">403</span><br><span class="line">404</span><br><span class="line">405</span><br><span class="line">406</span><br><span class="line">407</span><br><span class="line">408</span><br><span class="line">409</span><br><span class="line">410</span><br><span class="line">411</span><br><span class="line">412</span><br><span class="line">413</span><br><span class="line">414</span><br><span class="line">415</span><br><span class="line">416</span><br><span class="line">417</span><br><span class="line">418</span><br><span class="line">419</span><br><span class="line">420</span><br><span class="line">421</span><br><span class="line">422</span><br><span class="line">423</span><br><span class="line">424</span><br><span class="line">425</span><br><span class="line">426</span><br><span class="line">427</span><br><span class="line">428</span><br><span class="line">429</span><br><span class="line">430</span><br><span class="line">431</span><br><span class="line">432</span><br><span class="line">433</span><br><span class="line">434</span><br><span class="line">435</span><br><span class="line">436</span><br><span class="line">437</span><br><span class="line">438</span><br><span class="line">439</span><br><span class="line">440</span><br><span class="line">441</span><br><span class="line">442</span><br><span class="line">443</span><br><span class="line">444</span><br><span class="line">445</span><br><span class="line">446</span><br><span class="line">447</span><br><span class="line">448</span><br><span class="line">449</span><br><span class="line">450</span><br><span class="line">451</span><br><span class="line">452</span><br><span class="line">453</span><br><span class="line">454</span><br><span class="line">455</span><br><span class="line">456</span><br><span class="line">457</span><br><span class="line">458</span><br><span class="line">459</span><br><span class="line">460</span><br><span class="line">461</span><br><span class="line">462</span><br><span class="line">463</span><br><span class="line">464</span><br><span class="line">465</span><br><span class="line">466</span><br><span class="line">467</span><br><span class="line">468</span><br><span class="line">469</span><br><span class="line">470</span><br><span class="line">471</span><br><span class="line">472</span><br><span class="line">473</span><br><span class="line">474</span><br><span class="line">475</span><br><span class="line">476</span><br><span class="line">477</span><br><span class="line">478</span><br><span class="line">479</span><br><span class="line">480</span><br><span class="line">481</span><br><span class="line">482</span><br><span class="line">483</span><br><span class="line">484</span><br><span class="line">485</span><br><span class="line">486</span><br><span class="line">487</span><br><span class="line">488</span><br><span class="line">489</span><br><span class="line">490</span><br><span class="line">491</span><br><span class="line">492</span><br><span class="line">493</span><br><span class="line">494</span><br><span class="line">495</span><br><span class="line">496</span><br><span class="line">497</span><br><span class="line">498</span><br><span class="line">499</span><br><span class="line">500</span><br><span class="line">501</span><br><span class="line">502</span><br><span class="line">503</span><br><span class="line">504</span><br><span class="line">505</span><br><span class="line">506</span><br><span class="line">507</span><br><span class="line">508</span><br><span class="line">509</span><br><span class="line">510</span><br><span class="line">511</span><br><span class="line">512</span><br><span class="line">513</span><br><span class="line">514</span><br><span class="line">515</span><br><span class="line">516</span><br><span class="line">517</span><br><span class="line">518</span><br><span class="line">519</span><br><span class="line">520</span><br><span class="line">521</span><br><span class="line">522</span><br><span class="line">523</span><br><span class="line">524</span><br><span class="line">525</span><br><span class="line">526</span><br><span class="line">527</span><br><span class="line">528</span><br><span class="line">529</span><br><span class="line">530</span><br><span class="line">531</span><br><span class="line">532</span><br><span class="line">533</span><br><span class="line">534</span><br><span class="line">535</span><br><span class="line">536</span><br><span class="line">537</span><br><span class="line">538</span><br><span class="line">539</span><br><span class="line">540</span><br><span class="line">541</span><br><span class="line">542</span><br><span class="line">543</span><br><span class="line">544</span><br><span class="line">545</span><br><span class="line">546</span><br><span class="line">547</span><br><span class="line">548</span><br><span class="line">549</span><br><span class="line">550</span><br><span class="line">551</span><br><span class="line">552</span><br><span class="line">553</span><br><span class="line">554</span><br><span class="line">555</span><br><span class="line">556</span><br><span class="line">557</span><br><span class="line">558</span><br><span class="line">559</span><br><span class="line">560</span><br><span class="line">561</span><br><span class="line">562</span><br><span class="line">563</span><br><span class="line">564</span><br><span class="line">565</span><br><span class="line">566</span><br><span class="line">567</span><br><span class="line">568</span><br><span class="line">569</span><br><span class="line">570</span><br><span class="line">571</span><br><span class="line">572</span><br><span class="line">573</span><br><span class="line">574</span><br><span class="line">575</span><br><span class="line">576</span><br><span class="line">577</span><br><span class="line">578</span><br><span class="line">579</span><br><span class="line">580</span><br><span class="line">581</span><br><span class="line">582</span><br><span class="line">583</span><br><span class="line">584</span><br><span class="line">585</span><br><span class="line">586</span><br><span class="line">587</span><br><span class="line">588</span><br><span class="line">589</span><br><span class="line">590</span><br><span class="line">591</span><br><span class="line">592</span><br><span class="line">593</span><br><span class="line">594</span><br><span class="line">595</span><br><span class="line">596</span><br><span class="line">597</span><br><span class="line">598</span><br><span class="line">599</span><br><span class="line">600</span><br><span class="line">601</span><br><span class="line">602</span><br><span class="line">603</span><br><span class="line">604</span><br><span class="line">605</span><br><span class="line">606</span><br><span class="line">607</span><br><span class="line">608</span><br><span class="line">609</span><br><span class="line">610</span><br><span class="line">611</span><br><span class="line">612</span><br><span class="line">613</span><br><span class="line">614</span><br><span class="line">615</span><br><span class="line">616</span><br><span class="line">617</span><br><span class="line">618</span><br><span class="line">619</span><br><span class="line">620</span><br><span class="line">621</span><br><span class="line">622</span><br><span class="line">623</span><br><span class="line">624</span><br><span class="line">625</span><br><span class="line">626</span><br><span class="line">627</span><br><span class="line">628</span><br><span class="line">629</span><br><span class="line">630</span><br><span class="line">631</span><br><span class="line">632</span><br><span class="line">633</span><br><span class="line">634</span><br><span class="line">635</span><br><span class="line">636</span><br><span class="line">637</span><br><span class="line">638</span><br><span class="line">639</span><br><span class="line">640</span><br><span class="line">641</span><br><span class="line">642</span><br><span class="line">643</span><br><span class="line">644</span><br><span class="line">645</span><br><span class="line">646</span><br><span class="line">647</span><br><span class="line">648</span><br><span class="line">649</span><br><span class="line">650</span><br><span class="line">651</span><br><span class="line">652</span><br><span class="line">653</span><br><span class="line">654</span><br><span class="line">655</span><br><span class="line">656</span><br><span class="line">657</span><br><span class="line">658</span><br><span class="line">659</span><br><span class="line">660</span><br><span class="line">661</span><br><span class="line">662</span><br><span class="line">663</span><br><span class="line">664</span><br><span class="line">665</span><br><span class="line">666</span><br><span class="line">667</span><br><span class="line">668</span><br><span class="line">669</span><br><span class="line">670</span><br><span class="line">671</span><br><span class="line">672</span><br><span class="line">673</span><br><span class="line">674</span><br><span class="line">675</span><br><span class="line">676</span><br><span class="line">677</span><br><span class="line">678</span><br><span class="line">679</span><br><span class="line">680</span><br><span class="line">681</span><br><span class="line">682</span><br><span class="line">683</span><br><span class="line">684</span><br><span class="line">685</span><br><span class="line">686</span><br><span class="line">687</span><br><span class="line">688</span><br><span class="line">689</span><br><span class="line">690</span><br><span class="line">691</span><br><span class="line">692</span><br><span class="line">693</span><br><span class="line">694</span><br><span class="line">695</span><br><span class="line">696</span><br><span class="line">697</span><br><span class="line">698</span><br><span class="line">699</span><br><span class="line">700</span><br><span class="line">701</span><br><span class="line">702</span><br><span class="line">703</span><br><span class="line">704</span><br><span class="line">705</span><br><span class="line">706</span><br><span class="line">707</span><br><span class="line">708</span><br><span class="line">709</span><br><span class="line">710</span><br><span class="line">711</span><br><span class="line">712</span><br><span class="line">713</span><br><span class="line">714</span><br><span class="line">715</span><br><span class="line">716</span><br><span class="line">717</span><br><span class="line">718</span><br><span class="line">719</span><br><span class="line">720</span><br><span class="line">721</span><br><span class="line">722</span><br><span class="line">723</span><br><span class="line">724</span><br><span class="line">725</span><br><span class="line">726</span><br><span class="line">727</span><br><span class="line">728</span><br><span class="line">729</span><br><span class="line">730</span><br><span class="line">731</span><br><span class="line">732</span><br><span class="line">733</span><br><span class="line">734</span><br><span class="line">735</span><br><span class="line">736</span><br><span class="line">737</span><br><span class="line">738</span><br><span class="line">739</span><br><span class="line">740</span><br><span class="line">741</span><br><span class="line">742</span><br><span class="line">743</span><br><span class="line">744</span><br><span class="line">745</span><br><span class="line">746</span><br><span class="line">747</span><br><span class="line">748</span><br><span class="line">749</span><br><span class="line">750</span><br><span class="line">751</span><br><span class="line">752</span><br><span class="line">753</span><br><span class="line">754</span><br><span class="line">755</span><br><span class="line">756</span><br><span class="line">757</span><br><span class="line">758</span><br><span class="line">759</span><br><span class="line">760</span><br></pre></td><td class="code"><pre><span class="line">;篇幅有限，删去了源文件中的版权声明。版权归原作者，仅供学习交流使用</span><br><span class="line">org	10000h	;因为上面的boot引导“规定”，BaseOfLoader 0x1000  OffsetOfLoader 0x00 Addr = Base &lt;&lt; 4 + Offset</span><br><span class="line">;跳转的时候会跳转到10000h所以必须放在这里</span><br><span class="line">	jmp	Label_Start</span><br><span class="line"></span><br><span class="line">%include	&quot;fat12.inc&quot;</span><br><span class="line"></span><br><span class="line">BaseOfKernelFile	equ	0x00</span><br><span class="line">OffsetOfKernelFile	equ	0x100000	;把内核文件放在1MB处，简单方便</span><br><span class="line"></span><br><span class="line">BaseTmpOfKernelAddr	equ	0x00</span><br><span class="line">OffsetTmpOfKernelFile	equ	0x7E00	;因为BIOS实模式下只支持上限为1MB的寻址，我们需要先临时放在这里再用特殊手段放在1MB处</span><br><span class="line"></span><br><span class="line">MemoryStructBufferAddr	equ	0x7E00	;也可以将这段空间用作内存结构数据的存储空间</span><br><span class="line"></span><br><span class="line">[SECTION gdt]</span><br><span class="line">;创建临时GDT表</span><br><span class="line"></span><br><span class="line">LABEL_GDT:		dd	0,0</span><br><span class="line">LABEL_DESC_CODE32:	dd	0x0000FFFF,0x00CF9A00</span><br><span class="line">LABEL_DESC_DATA32:	dd	0x0000FFFF,0x00CF9200</span><br><span class="line"></span><br><span class="line">GdtLen	equ	$ - LABEL_GDT</span><br><span class="line">GdtPtr	dw	GdtLen - 1</span><br><span class="line">	dd	LABEL_GDT</span><br><span class="line"></span><br><span class="line">SelectorCode32	equ	LABEL_DESC_CODE32 - LABEL_GDT</span><br><span class="line">SelectorData32	equ	LABEL_DESC_DATA32 - LABEL_GDT</span><br><span class="line"></span><br><span class="line">[SECTION gdt64]</span><br><span class="line"></span><br><span class="line">LABEL_GDT64:		dq	0x0000000000000000</span><br><span class="line">LABEL_DESC_CODE64:	dq	0x0020980000000000</span><br><span class="line">LABEL_DESC_DATA64:	dq	0x0000920000000000</span><br><span class="line"></span><br><span class="line">GdtLen64	equ	$ - LABEL_GDT64</span><br><span class="line">GdtPtr64	dw	GdtLen64 - 1</span><br><span class="line">		dd	LABEL_GDT64</span><br><span class="line"></span><br><span class="line">SelectorCode64	equ	LABEL_DESC_CODE64 - LABEL_GDT64</span><br><span class="line">SelectorData64	equ	LABEL_DESC_DATA64 - LABEL_GDT64</span><br><span class="line"></span><br><span class="line">[SECTION .s16]	;定义一个名为.s16的段</span><br><span class="line">[BITS 16]		;通知NASM编译器使用16位宽模式</span><br><span class="line">				;在这个模式下，使用32bit数据指令需要在指令前加0x66前缀，地址指令需要加的前缀是0x67</span><br><span class="line"></span><br><span class="line">Label_Start:</span><br><span class="line"></span><br><span class="line">	mov	ax,	cs</span><br><span class="line">	mov	ds,	ax</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	ax,	0x00</span><br><span class="line">	mov	ss,	ax</span><br><span class="line">	mov	sp,	0x7c00	;????这里栈指针为什么依然是0x7c00，估计就是定一个位置，只要不直接pop出未定义的东西，就问题不大</span><br><span class="line"></span><br><span class="line">;=======	display on screen : Start Loader......</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000fh</span><br><span class="line">	mov	dx,	0200h		;row 2</span><br><span class="line">	mov	cx,	12</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	StartLoaderMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	open address A20</span><br><span class="line">	;开启地址A20功能</span><br><span class="line">	;A20功能控制是否只有低20位地址有效，默认A20地址线被禁用。</span><br><span class="line">	;开启A20功能有多种方式，详见P57</span><br><span class="line">	;这里采用A20快速门(Fast Gate A20)，使用I/O端口0x92来处理A20信号线，置位0x92端口的第1位（而不是第0位）</span><br><span class="line">	push	ax</span><br><span class="line">	in	al,	92h</span><br><span class="line">	or	al,	00000010b</span><br><span class="line">	out	92h,	al</span><br><span class="line">	pop	ax</span><br><span class="line"></span><br><span class="line">	cli	;关闭外部中断，所有外部中断都被屏蔽，保证当前运行的代码不被打断，保护代码运行。</span><br><span class="line"></span><br><span class="line">	db	0x66	;应该是NASM不能自动添加前缀，这里补上的，那么可不可以使用dword呢？	</span><br><span class="line">	lgdt	[GdtPtr]	;加载保护模式结构数据信息	</span><br><span class="line"></span><br><span class="line">	mov	eax,	cr0</span><br><span class="line">	or	eax,	1</span><br><span class="line">	mov	cr0,	eax		;置位CR0寄存器第0位开启保护模式</span><br><span class="line"></span><br><span class="line">	mov	ax,	SelectorData32	</span><br><span class="line">	mov	fs,	ax			;将新的数据段值加载到fs中</span><br><span class="line">	mov	eax,	cr0</span><br><span class="line">	and	al,	11111110b	</span><br><span class="line">	mov	cr0,	eax		;开启实模式</span><br><span class="line"></span><br><span class="line">	sti					;开启外部中断</span><br><span class="line">	;这就是Big Real Mode</span><br><span class="line"></span><br><span class="line">;=======	reset floppy</span><br><span class="line"></span><br><span class="line">	xor	ah,	ah</span><br><span class="line">	xor	dl,	dl</span><br><span class="line">	int	13h</span><br><span class="line"></span><br><span class="line">;=======	search kernel.bin</span><br><span class="line">;和上面的搜索loader.bin相似</span><br><span class="line">	mov	word	[SectorNo],	SectorNumOfRootDirStart</span><br><span class="line"></span><br><span class="line">Lable_Search_In_Root_Dir_Begin:</span><br><span class="line"></span><br><span class="line">	cmp	word	[RootDirSizeForLoop],	0</span><br><span class="line">	jz	Label_No_LoaderBin</span><br><span class="line">	dec	word	[RootDirSizeForLoop]	</span><br><span class="line">	mov	ax,	00h</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	bx,	8000h</span><br><span class="line">	mov	ax,	[SectorNo]</span><br><span class="line">	mov	cl,	1</span><br><span class="line">	call	Func_ReadOneSector</span><br><span class="line">	mov	si,	KernelFileName</span><br><span class="line">	mov	di,	8000h</span><br><span class="line">	cld</span><br><span class="line">	mov	dx,	10h</span><br><span class="line">	</span><br><span class="line">Label_Search_For_LoaderBin:</span><br><span class="line"></span><br><span class="line">	cmp	dx,	0</span><br><span class="line">	jz	Label_Goto_Next_Sector_In_Root_Dir</span><br><span class="line">	dec	dx</span><br><span class="line">	mov	cx,	11</span><br><span class="line"></span><br><span class="line">Label_Cmp_FileName:</span><br><span class="line"></span><br><span class="line">	cmp	cx,	0</span><br><span class="line">	jz	Label_FileName_Found</span><br><span class="line">	dec	cx</span><br><span class="line">	lodsb	</span><br><span class="line">	cmp	al,	byte	[es:di]</span><br><span class="line">	jz	Label_Go_On</span><br><span class="line">	jmp	Label_Different</span><br><span class="line"></span><br><span class="line">Label_Go_On:</span><br><span class="line">	</span><br><span class="line">	inc	di</span><br><span class="line">	jmp	Label_Cmp_FileName</span><br><span class="line"></span><br><span class="line">Label_Different:</span><br><span class="line"></span><br><span class="line">	and	di,	0FFE0h</span><br><span class="line">	add	di,	20h</span><br><span class="line">	mov	si,	KernelFileName</span><br><span class="line">	jmp	Label_Search_For_LoaderBin</span><br><span class="line"></span><br><span class="line">Label_Goto_Next_Sector_In_Root_Dir:</span><br><span class="line">	</span><br><span class="line">	add	word	[SectorNo],	1</span><br><span class="line">	jmp	Lable_Search_In_Root_Dir_Begin</span><br><span class="line">	</span><br><span class="line">;=======	display on screen : ERROR:No KERNEL Found</span><br><span class="line"></span><br><span class="line">Label_No_LoaderBin:	;哈哈，这标签，看来原作者是把这部分直接“复用”了</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	008Ch</span><br><span class="line">	mov	dx,	0300h		;row 3</span><br><span class="line">	mov	cx,	21</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	NoLoaderMessage</span><br><span class="line">	int	10h</span><br><span class="line">	jmp	$</span><br><span class="line"></span><br><span class="line">;=======	found loader.bin name in root director struct</span><br><span class="line"></span><br><span class="line">Label_FileName_Found:</span><br><span class="line">	mov	ax,	RootDirSectors</span><br><span class="line">	and	di,	0FFE0h</span><br><span class="line">	add	di,	01Ah</span><br><span class="line">	mov	cx,	word	[es:di]</span><br><span class="line">	push	cx</span><br><span class="line">	add	cx,	ax</span><br><span class="line">	add	cx,	SectorBalance</span><br><span class="line">	mov	eax,	BaseTmpOfKernelAddr	;BaseOfKernelFile	;为什么这里使用eax寄存器？我猜是写错了。</span><br><span class="line">	mov	es,	eax</span><br><span class="line">	mov	bx,	OffsetTmpOfKernelFile	;OffsetOfKernelFile	;为什么这里又不用ebx寄存器了呢？</span><br><span class="line">	mov	ax,	cx</span><br><span class="line"></span><br><span class="line">Label_Go_On_Loading_File:</span><br><span class="line">	push	ax</span><br><span class="line">	push	bx</span><br><span class="line">	mov	ah,	0Eh</span><br><span class="line">	mov	al,	&#x27;.&#x27;</span><br><span class="line">	mov	bl,	0Fh</span><br><span class="line">	int	10h</span><br><span class="line">	pop	bx</span><br><span class="line">	pop	ax</span><br><span class="line"></span><br><span class="line">	mov	cl,	1</span><br><span class="line">	call	Func_ReadOneSector</span><br><span class="line">	pop	ax</span><br><span class="line"></span><br><span class="line">;;;;;;;;;;;;;;;;;;;;;;;	</span><br><span class="line">	push	cx</span><br><span class="line">	push	eax</span><br><span class="line">	push	fs		</span><br><span class="line">	push	edi</span><br><span class="line">	push	ds</span><br><span class="line">	push	esi</span><br><span class="line"></span><br><span class="line">	mov	cx,	200h	;一个扇区的字节数，用作下面loop指令循环自减</span><br><span class="line">	mov	ax,	BaseOfKernelFile</span><br><span class="line">	mov	fs,	ax			;这里在 物理机 会出错，实际上也没什么用。</span><br><span class="line">	mov	edi,	dword	[OffsetOfKernelFileCount]</span><br><span class="line"></span><br><span class="line">	mov	ax,	BaseTmpOfKernelAddr</span><br><span class="line">	mov	ds,	ax</span><br><span class="line">	mov	esi,	OffsetTmpOfKernelFile</span><br><span class="line"></span><br><span class="line">Label_Mov_Kernel:	;------------------</span><br><span class="line">;一个字节一个字节地从临时存储区复制到1MB的地方</span><br><span class="line">	</span><br><span class="line">	mov	al,	byte	[ds:esi]</span><br><span class="line">	mov	byte	[fs:edi],	al</span><br><span class="line"></span><br><span class="line">	inc	esi</span><br><span class="line">	inc	edi</span><br><span class="line"></span><br><span class="line">	loop	Label_Mov_Kernel</span><br><span class="line"></span><br><span class="line">	mov	eax,	0x1000</span><br><span class="line">	mov	ds,	eax</span><br><span class="line"></span><br><span class="line">	mov	dword	[OffsetOfKernelFileCount],	edi</span><br><span class="line"></span><br><span class="line">	pop	esi</span><br><span class="line">	pop	ds</span><br><span class="line">	pop	edi</span><br><span class="line">	pop	fs</span><br><span class="line">	pop	eax</span><br><span class="line">	pop	cx</span><br><span class="line">;;;;;;;;;;;;;;;;;;;;;;;	</span><br><span class="line"></span><br><span class="line">	call	Func_GetFATEntry</span><br><span class="line">	cmp	ax,	0FFFh</span><br><span class="line">	jz	Label_File_Loaded</span><br><span class="line">	push	ax</span><br><span class="line">	mov	dx,	RootDirSectors</span><br><span class="line">	add	ax,	dx</span><br><span class="line">	add	ax,	SectorBalance</span><br><span class="line"></span><br><span class="line">	jmp	Label_Go_On_Loading_File</span><br><span class="line"></span><br><span class="line">Label_File_Loaded:</span><br><span class="line">		</span><br><span class="line">	mov	ax, 0B800h</span><br><span class="line">	mov	gs, ax</span><br><span class="line">	mov	ah, 0Fh				; 0000: 黑底    1111: 白字</span><br><span class="line">	mov	al, &#x27;G&#x27;</span><br><span class="line">	mov	[gs:((80 * 0 + 39) * 2)], ax	; 屏幕第 0 行, 第 39 列。</span><br><span class="line">	;显示字符的另一种玩法，从内存地址0B800h开始是一段专门用于显示字符的内存空间，这里就是在操作显示内存</span><br><span class="line"></span><br><span class="line">KillMotor:</span><br><span class="line">	;操作系统内核加载完毕，关闭软驱马达（暂时用不到了）</span><br><span class="line">	;通过向I/O端口3F2h写入控制命令实现</span><br><span class="line">	push	dx</span><br><span class="line">	mov	dx,	03F2h</span><br><span class="line">	;out指令的源操作数可以选用AL/AX/EAX寄存器；目的操作数可以是立即数（只能8位宽）或DX寄存器（可以取到16位宽）</span><br><span class="line">	mov	al,	0	</span><br><span class="line">	out	dx,	al</span><br><span class="line">	pop	dx</span><br><span class="line"></span><br><span class="line">;=======	get memory address size type</span><br><span class="line">;下面，临时转存空间将用于保存物理地址空间信息</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000Fh</span><br><span class="line">	mov	dx,	0400h		;row 4</span><br><span class="line">	mov	cx,	24</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	StartGetMemStructMessage</span><br><span class="line">	int	10h</span><br><span class="line">	;显示消息</span><br><span class="line"></span><br><span class="line">	mov	ebx,	0</span><br><span class="line">	mov	ax,	0x00</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	di,	MemoryStructBufferAddr	</span><br><span class="line"></span><br><span class="line">Label_Get_Mem_Struct:</span><br><span class="line"></span><br><span class="line">	mov	eax,	0x0E820</span><br><span class="line">	mov	ecx,	20</span><br><span class="line">	mov	edx,	0x534D4150</span><br><span class="line">	int	15h</span><br><span class="line">	;就是通过调用INT 15h获取物理地址空间信息，详见上面的参考</span><br><span class="line">	jc	Label_Get_Mem_Fail</span><br><span class="line">	add	di,	20</span><br><span class="line">	;物理地址空间信息结构占20B，di+20为了读下一个</span><br><span class="line"></span><br><span class="line">	cmp	ebx,	0</span><br><span class="line">	jne	Label_Get_Mem_Struct</span><br><span class="line">	;不为0说明还有信息</span><br><span class="line">	jmp	Label_Get_Mem_OK</span><br><span class="line"></span><br><span class="line">Label_Get_Mem_Fail:</span><br><span class="line">	;显示消息然后死循环</span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	008Ch</span><br><span class="line">	mov	dx,	0500h		;row 5</span><br><span class="line">	mov	cx,	23</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	GetMemStructErrMessage</span><br><span class="line">	int	10h</span><br><span class="line">	jmp	$</span><br><span class="line"></span><br><span class="line">Label_Get_Mem_OK:</span><br><span class="line">	</span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000Fh</span><br><span class="line">	mov	dx,	0600h		;row 6</span><br><span class="line">	mov	cx,	29</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	GetMemStructOKMessage</span><br><span class="line">	int	10h	</span><br><span class="line">	;显示消息</span><br><span class="line"></span><br><span class="line">;=======	get SVGA information</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000Fh</span><br><span class="line">	mov	dx,	0800h		;row 8</span><br><span class="line">	mov	cx,	23</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	StartGetSVGAVBEInfoMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">	mov	ax,	0x00</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	di,	0x8000</span><br><span class="line">	mov	ax,	4F00h</span><br><span class="line"></span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">	cmp	ax,	004Fh</span><br><span class="line"></span><br><span class="line">	jz	.KO</span><br><span class="line">	</span><br><span class="line">;=======	Fail</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	008Ch</span><br><span class="line">	mov	dx,	0900h		;row 9</span><br><span class="line">	mov	cx,	23</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	GetSVGAVBEInfoErrMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">	jmp	$</span><br><span class="line"></span><br><span class="line">.KO:</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000Fh</span><br><span class="line">	mov	dx,	0A00h		;row 10</span><br><span class="line">	mov	cx,	29</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	GetSVGAVBEInfoOKMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	Get SVGA Mode Info</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000Fh</span><br><span class="line">	mov	dx,	0C00h		;row 12</span><br><span class="line">	mov	cx,	24</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	StartGetSVGAModeInfoMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	mov	ax,	0x00</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	si,	0x800e</span><br><span class="line"></span><br><span class="line">	mov	esi,	dword	[es:si]</span><br><span class="line">	mov	edi,	0x8200</span><br><span class="line"></span><br><span class="line">Label_SVGA_Mode_Info_Get:</span><br><span class="line"></span><br><span class="line">	mov	cx,	word	[es:esi]</span><br><span class="line"></span><br><span class="line">;=======	display SVGA mode information</span><br><span class="line"></span><br><span class="line">	push	ax</span><br><span class="line">	</span><br><span class="line">	mov	ax,	00h</span><br><span class="line">	mov	al,	ch</span><br><span class="line">	call	Label_DispAL</span><br><span class="line"></span><br><span class="line">	mov	ax,	00h</span><br><span class="line">	mov	al,	cl	</span><br><span class="line">	call	Label_DispAL</span><br><span class="line">	</span><br><span class="line">	pop	ax</span><br><span class="line"></span><br><span class="line">;=======</span><br><span class="line">	</span><br><span class="line">	cmp	cx,	0FFFFh</span><br><span class="line">	jz	Label_SVGA_Mode_Info_Finish</span><br><span class="line"></span><br><span class="line">	mov	ax,	4F01h</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">	cmp	ax,	004Fh</span><br><span class="line"></span><br><span class="line">	jnz	Label_SVGA_Mode_Info_FAIL	</span><br><span class="line"></span><br><span class="line">	add	esi,	2</span><br><span class="line">	add	edi,	0x100</span><br><span class="line"></span><br><span class="line">	jmp	Label_SVGA_Mode_Info_Get</span><br><span class="line">		</span><br><span class="line">Label_SVGA_Mode_Info_FAIL:</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	008Ch</span><br><span class="line">	mov	dx,	0D00h		;row 13</span><br><span class="line">	mov	cx,	24</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	GetSVGAModeInfoErrMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">Label_SET_SVGA_Mode_VESA_VBE_FAIL:</span><br><span class="line"></span><br><span class="line">	jmp	$</span><br><span class="line"></span><br><span class="line">Label_SVGA_Mode_Info_Finish:</span><br><span class="line"></span><br><span class="line">	mov	ax,	1301h</span><br><span class="line">	mov	bx,	000Fh</span><br><span class="line">	mov	dx,	0E00h		;row 14</span><br><span class="line">	mov	cx,	30</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	ds</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	bp,	GetSVGAModeInfoOKMessage</span><br><span class="line">	int	10h</span><br><span class="line"></span><br><span class="line">;=======	set the SVGA mode(VESA VBE)</span><br><span class="line"></span><br><span class="line">	mov	ax,	4F02h</span><br><span class="line">	mov	bx,	4180h	;========================mode : 0x180 or 0x143详见P64</span><br><span class="line">	int 	10h</span><br><span class="line"></span><br><span class="line">	cmp	ax,	004Fh</span><br><span class="line">	jnz	Label_SET_SVGA_Mode_VESA_VBE_FAIL</span><br><span class="line"></span><br><span class="line">;=======	init IDT GDT goto protect mode </span><br><span class="line">;</span><br><span class="line">	cli			;======close interrupt</span><br><span class="line"></span><br><span class="line">	db	0x66</span><br><span class="line">	lgdt	[GdtPtr]</span><br><span class="line"></span><br><span class="line">;	db	0x66</span><br><span class="line">;	lidt	[IDT_POINTER]</span><br><span class="line"></span><br><span class="line">	mov	eax,	cr0</span><br><span class="line">	or	eax,	1</span><br><span class="line">	mov	cr0,	eax	</span><br><span class="line"></span><br><span class="line">	jmp	dword SelectorCode32:GO_TO_TMP_Protect</span><br><span class="line"></span><br><span class="line">[SECTION .s32]</span><br><span class="line">[BITS 32]</span><br><span class="line"></span><br><span class="line">GO_TO_TMP_Protect:</span><br><span class="line"></span><br><span class="line">;=======	go to tmp long mode</span><br><span class="line"></span><br><span class="line">	mov	ax,	0x10</span><br><span class="line">	mov	ds,	ax</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	fs,	ax</span><br><span class="line">	mov	ss,	ax</span><br><span class="line">	mov	esp,	7E00h</span><br><span class="line"></span><br><span class="line">	call	support_long_mode</span><br><span class="line">	test	eax,	eax</span><br><span class="line"></span><br><span class="line">	jz	no_support</span><br><span class="line"></span><br><span class="line">;=======	init temporary page table 0x90000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x90000],	0x91007</span><br><span class="line">	mov	dword	[0x90004],	0x00000</span><br><span class="line">	mov	dword	[0x90800],	0x91007</span><br><span class="line">	mov	dword	[0x90804],	0x00000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x91000],	0x92007</span><br><span class="line">	mov	dword	[0x91004],	0x00000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x92000],	0x000083</span><br><span class="line">	mov	dword	[0x92004],	0x000000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x92008],	0x200083</span><br><span class="line">	mov	dword	[0x9200c],	0x000000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x92010],	0x400083</span><br><span class="line">	mov	dword	[0x92014],	0x000000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x92018],	0x600083</span><br><span class="line">	mov	dword	[0x9201c],	0x000000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x92020],	0x800083</span><br><span class="line">	mov	dword	[0x92024],	0x000000</span><br><span class="line"></span><br><span class="line">	mov	dword	[0x92028],	0xa00083</span><br><span class="line">	mov	dword	[0x9202c],	0x000000</span><br><span class="line"></span><br><span class="line">;=======	load GDTR</span><br><span class="line"></span><br><span class="line">	db	0x66</span><br><span class="line">	lgdt	[GdtPtr64]</span><br><span class="line">	mov	ax,	0x10</span><br><span class="line">	mov	ds,	ax</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	mov	fs,	ax</span><br><span class="line">	mov	gs,	ax</span><br><span class="line">	mov	ss,	ax</span><br><span class="line"></span><br><span class="line">	mov	esp,	7E00h</span><br><span class="line"></span><br><span class="line">;=======	open PAE</span><br><span class="line"></span><br><span class="line">	mov	eax,	cr4</span><br><span class="line">	bts	eax,	5</span><br><span class="line">	mov	cr4,	eax</span><br><span class="line"></span><br><span class="line">;=======	load	cr3</span><br><span class="line"></span><br><span class="line">	mov	eax,	0x90000</span><br><span class="line">	mov	cr3,	eax</span><br><span class="line"></span><br><span class="line">;=======	enable long-mode</span><br><span class="line"></span><br><span class="line">	mov	ecx,	0C0000080h		;IA32_EFER</span><br><span class="line">	rdmsr</span><br><span class="line"></span><br><span class="line">	bts	eax,	8</span><br><span class="line">	wrmsr</span><br><span class="line"></span><br><span class="line">;=======	open PE and paging</span><br><span class="line"></span><br><span class="line">	mov	eax,	cr0</span><br><span class="line">	bts	eax,	0</span><br><span class="line">	bts	eax,	31</span><br><span class="line">	mov	cr0,	eax</span><br><span class="line"></span><br><span class="line">	jmp	SelectorCode64:OffsetOfKernelFile</span><br><span class="line"></span><br><span class="line">;=======	test support long mode or not</span><br><span class="line"></span><br><span class="line">support_long_mode:</span><br><span class="line"></span><br><span class="line">	mov	eax,	0x80000000</span><br><span class="line">	cpuid</span><br><span class="line">	cmp	eax,	0x80000001</span><br><span class="line">	setnb	al	</span><br><span class="line">	jb	support_long_mode_done</span><br><span class="line">	mov	eax,	0x80000001</span><br><span class="line">	cpuid</span><br><span class="line">	bt	edx,	29</span><br><span class="line">	setc	al</span><br><span class="line">support_long_mode_done:</span><br><span class="line">	</span><br><span class="line">	movzx	eax,	al</span><br><span class="line">	ret</span><br><span class="line"></span><br><span class="line">;=======	no support</span><br><span class="line"></span><br><span class="line">no_support:</span><br><span class="line">	jmp	$</span><br><span class="line"></span><br><span class="line">;=======	read one sector from floppy</span><br><span class="line"></span><br><span class="line">[SECTION .s16lib]</span><br><span class="line">[BITS 16]</span><br><span class="line"></span><br><span class="line">Func_ReadOneSector:</span><br><span class="line">	</span><br><span class="line">	push	bp</span><br><span class="line">	mov	bp,	sp</span><br><span class="line">	sub	esp,	2</span><br><span class="line">	mov	byte	[bp - 2],	cl</span><br><span class="line">	push	bx</span><br><span class="line">	mov	bl,	[BPB_SecPerTrk]</span><br><span class="line">	div	bl</span><br><span class="line">	inc	ah</span><br><span class="line">	mov	cl,	ah</span><br><span class="line">	mov	dh,	al</span><br><span class="line">	shr	al,	1</span><br><span class="line">	mov	ch,	al</span><br><span class="line">	and	dh,	1</span><br><span class="line">	pop	bx</span><br><span class="line">	mov	dl,	[BS_DrvNum]</span><br><span class="line">Label_Go_On_Reading:</span><br><span class="line">	mov	ah,	2</span><br><span class="line">	mov	al,	byte	[bp - 2]</span><br><span class="line">	int	13h</span><br><span class="line">	jc	Label_Go_On_Reading</span><br><span class="line">	add	esp,	2</span><br><span class="line">	pop	bp</span><br><span class="line">	ret</span><br><span class="line"></span><br><span class="line">;=======	get FAT Entry</span><br><span class="line"></span><br><span class="line">Func_GetFATEntry:</span><br><span class="line"></span><br><span class="line">	push	es</span><br><span class="line">	push	bx</span><br><span class="line">	push	ax</span><br><span class="line">	mov	ax,	00</span><br><span class="line">	mov	es,	ax</span><br><span class="line">	pop	ax</span><br><span class="line">	mov	byte	[Odd],	0</span><br><span class="line">	mov	bx,	3</span><br><span class="line">	mul	bx</span><br><span class="line">	mov	bx,	2</span><br><span class="line">	div	bx</span><br><span class="line">	cmp	dx,	0</span><br><span class="line">	jz	Label_Even</span><br><span class="line">	mov	byte	[Odd],	1</span><br><span class="line"></span><br><span class="line">Label_Even:</span><br><span class="line"></span><br><span class="line">	xor	dx,	dx</span><br><span class="line">	mov	bx,	[BPB_BytesPerSec]</span><br><span class="line">	div	bx</span><br><span class="line">	push	dx</span><br><span class="line">	mov	bx,	8000h</span><br><span class="line">	add	ax,	SectorNumOfFAT1Start</span><br><span class="line">	mov	cl,	2</span><br><span class="line">	call	Func_ReadOneSector</span><br><span class="line">	</span><br><span class="line">	pop	dx</span><br><span class="line">	add	bx,	dx</span><br><span class="line">	mov	ax,	[es:bx]</span><br><span class="line">	cmp	byte	[Odd],	1</span><br><span class="line">	jnz	Label_Even_2</span><br><span class="line">	shr	ax,	4</span><br><span class="line"></span><br><span class="line">Label_Even_2:</span><br><span class="line">	and	ax,	0FFFh</span><br><span class="line">	pop	bx</span><br><span class="line">	pop	es</span><br><span class="line">	ret</span><br><span class="line"></span><br><span class="line">;=======	display num in al</span><br><span class="line">;将16进制数值显示到屏幕上 AL=要显示的16进制数</span><br><span class="line">Label_DispAL:</span><br><span class="line"></span><br><span class="line">	push	ecx</span><br><span class="line">	push	edx</span><br><span class="line">	push	edi</span><br><span class="line">	</span><br><span class="line">	mov	edi,	[DisplayPosition]	;edi拿到显示位置</span><br><span class="line">	mov	ah,	0Fh</span><br><span class="line">	mov	dl,	al		;先保存低4位</span><br><span class="line">	shr	al,	4		;先显示高4位</span><br><span class="line">	mov	ecx,	2	;显示2个字符</span><br><span class="line">.begin:</span><br><span class="line"></span><br><span class="line">	and	al,	0Fh</span><br><span class="line">	cmp	al,	9		;和9比较，大于9要-10+‘A’，反之+‘0’；一定要注意大写字母和数字不连续</span><br><span class="line">	ja	.1</span><br><span class="line">	add	al,	&#x27;0&#x27;</span><br><span class="line">	jmp	.2</span><br><span class="line">.1:</span><br><span class="line"></span><br><span class="line">	sub	al,	0Ah</span><br><span class="line">	add	al,	&#x27;A&#x27;</span><br><span class="line">.2:</span><br><span class="line"></span><br><span class="line">	mov	[gs:edi],	ax</span><br><span class="line">	add	edi,	2	;显示一个字符后要移位置（一个字符占2B）</span><br><span class="line">	</span><br><span class="line">	mov	al,	dl</span><br><span class="line">	loop	.begin</span><br><span class="line"></span><br><span class="line">	mov	[DisplayPosition],	edi	;更新显示位置</span><br><span class="line"></span><br><span class="line">	pop	edi</span><br><span class="line">	pop	edx</span><br><span class="line">	pop	ecx</span><br><span class="line">	</span><br><span class="line">	ret</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">;=======	tmp IDT</span><br><span class="line"></span><br><span class="line">IDT:</span><br><span class="line">	times	0x50	dq	0</span><br><span class="line">IDT_END:</span><br><span class="line"></span><br><span class="line">IDT_POINTER:</span><br><span class="line">		dw	IDT_END - IDT - 1</span><br><span class="line">		dd	IDT</span><br><span class="line"></span><br><span class="line">;=======	tmp variable</span><br><span class="line"></span><br><span class="line">RootDirSizeForLoop	dw	RootDirSectors</span><br><span class="line">SectorNo		dw	0</span><br><span class="line">Odd			db	0</span><br><span class="line">OffsetOfKernelFileCount	dd	OffsetOfKernelFile</span><br><span class="line"></span><br><span class="line">DisplayPosition		dd	0</span><br><span class="line"></span><br><span class="line">;=======	display messages</span><br><span class="line"></span><br><span class="line">StartLoaderMessage:	db	&quot;Start Loader&quot;</span><br><span class="line">NoLoaderMessage:	db	&quot;ERROR:No KERNEL Found&quot;</span><br><span class="line">KernelFileName:		db	&quot;KERNEL  BIN&quot;,0</span><br><span class="line">StartGetMemStructMessage:	db	&quot;Start Get Memory Struct.&quot;</span><br><span class="line">GetMemStructErrMessage:	db	&quot;Get Memory Struct ERROR&quot;</span><br><span class="line">GetMemStructOKMessage:	db	&quot;Get Memory Struct SUCCESSFUL!&quot;</span><br><span class="line"></span><br><span class="line">StartGetSVGAVBEInfoMessage:	db	&quot;Start Get SVGA VBE Info&quot;</span><br><span class="line">GetSVGAVBEInfoErrMessage:	db	&quot;Get SVGA VBE Info ERROR&quot;</span><br><span class="line">GetSVGAVBEInfoOKMessage:	db	&quot;Get SVGA VBE Info SUCCESSFUL!&quot;</span><br><span class="line"></span><br><span class="line">StartGetSVGAModeInfoMessage:	db	&quot;Start Get SVGA Mode Info&quot;</span><br><span class="line">GetSVGAModeInfoErrMessage:	db	&quot;Get SVGA Mode Info ERROR&quot;</span><br><span class="line">GetSVGAModeInfoOKMessage:	db	&quot;Get SVGA Mode Info SUCCESSFUL!&quot;</span><br></pre></td></tr></table></figure>
+
+<h3 id="版权声明"><a href="#版权声明" class="headerlink" title="版权声明"></a>版权声明</h3><p>对于以上本文所有代码：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">/***************************************************</span><br><span class="line">		版权声明</span><br><span class="line">		</span><br><span class="line">	本操作系统名为：MINE</span><br><span class="line">	该操作系统未经授权不得以盈利或非盈利为目的进行开发，</span><br><span class="line">	只允许个人学习以及公开交流使用</span><br><span class="line">	代码最终所有权及解释权归田宇所有；</span><br><span class="line">	本模块作者：	田宇</span><br><span class="line">	EMail:		345538255@qq.com</span><br><span class="line">***************************************************/</span><br></pre></td></tr></table></figure> 
+      <!-- reward -->
+      
+    </div>
+    
+
+    <!-- copyright -->
+    
+    <div class="declare">
+      <ul class="post-copyright">
+        <li>
+          <i class="ri-copyright-line"></i>
+          <strong>版权声明： </strong>
+          
+          本博客所有文章除特别声明外，著作权归作者所有。转载请注明出处！
+          
+        </li>
+      </ul>
+    </div>
+    
+    <footer class="article-footer">
+       
+<div class="share-btn">
+      <span class="share-sns share-outer">
+        <i class="ri-share-forward-line"></i>
+        分享
+      </span>
+      <div class="share-wrap">
+        <i class="arrow"></i>
+        <div class="share-icons">
+          
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="ri-weibo-fill"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="ri-wechat-fill"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="ri-qq-fill"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="ri-douban-line"></i>
+          </a>
+          <!-- <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a> -->
+          
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="ri-facebook-circle-fill"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="ri-twitter-fill"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="ri-google-fill"></i>
+          </a>
+        </div>
+      </div>
+</div>
+
+<div class="wx-share-modal">
+    <a class="modal-close" href="javascript:;"><i class="ri-close-circle-line"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://0xtiger5.github.io/2022/01/%E5%AD%A6%E5%86%99%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E4%B9%8B-%E5%BC%95%E5%AF%BC%E7%A8%8B%E5%BA%8F/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div id="share-mask"></div>  
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/bootloader/" rel="tag">bootloader</a></li></ul>
+
+    </footer>
+  </div>
+
+   
+  <nav class="article-nav">
+    
+      <a href="/2022/01/%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AEProxy%20Server/" class="article-nav-link">
+        <strong class="article-nav-caption">上一篇</strong>
+        <div class="article-nav-title">
+          
+            自动配置Proxy Server
+          
+        </div>
+      </a>
+    
+    
+  </nav>
+
+  
+   
+     
+</article>
+
+</section>
+      <footer class="footer">
+  <div class="outer">
+    <ul>
+      <li>
+        Copyrights &copy;
+        2022
+        <i class="ri-heart-fill heart_icon"></i> 0xtiger5
+      </li>
+    </ul>
+    <ul>
+      <li>
+        
+      </li>
+    </ul>
+    <ul>
+      <li>
+        
+        
+        <span>
+  <span><i class="ri-user-3-fill"></i>访问人数:<span id="busuanzi_value_site_uv"></span></span>
+  <span class="division">|</span>
+  <span><i class="ri-eye-fill"></i>浏览次数:<span id="busuanzi_value_page_pv"></span></span>
+</span>
+        
+      </li>
+    </ul>
+    <ul>
+      
+    </ul>
+    <ul>
+      
+    </ul>
+    <ul>
+      <li>
+        <!-- cnzz统计 -->
+        
+        <script type="text/javascript" src='https://s9.cnzz.com/z_stat.php?id=1278069914&amp;web_id=1278069914'></script>
+        
+      </li>
+    </ul>
+  </div>
+</footer>    
+    </main>
+    <div class="float_btns">
+      <div class="totop" id="totop">
+  <i class="ri-arrow-up-line"></i>
+</div>
+
+<div class="todark" id="todark">
+  <i class="ri-moon-line"></i>
+</div>
+
+    </div>
+    <aside class="sidebar on">
+      <button class="navbar-toggle"></button>
+<nav class="navbar">
+  
+  <div class="logo">
+    <a href="/"><img src="/images/ayer-side.svg" alt="0xtiger5&#39;s Blog"></a>
+  </div>
+  
+  <ul class="nav nav-main">
+    
+    <li class="nav-item">
+      <a class="nav-item-link" href="/">主页</a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link" href="/archives">归档</a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link" href="/categories">分类</a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link" href="/tags">标签</a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link" href="/friends">友链</a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-item-link" href="/about">关于</a>
+    </li>
+    
+  </ul>
+</nav>
+<nav class="navbar navbar-bottom">
+  <ul class="nav">
+    <li class="nav-item">
+      
+      <a class="nav-item-link nav-item-search"  title="搜索">
+        <i class="ri-search-line"></i>
+      </a>
+      
+      
+    </li>
+  </ul>
+</nav>
+<div class="search-form-wrap">
+  <div class="local-search local-search-plugin">
+  <input type="search" id="local-search-input" class="local-search-input" placeholder="Search...">
+  <div id="local-search-result" class="local-search-result"></div>
+</div>
+</div>
+    </aside>
+    <div id="mask"></div>
+
+<!-- #reward -->
+<div id="reward">
+  <span class="close"><i class="ri-close-line"></i></span>
+  <p class="reward-p"><i class="ri-cup-line"></i>请我喝杯咖啡吧~</p>
+  <div class="reward-box">
+    
+    <div class="reward-item">
+      <img class="reward-img" src="/images/alipay.jpg">
+      <span class="reward-type">支付宝</span>
+    </div>
+    
+    
+    <div class="reward-item">
+      <img class="reward-img" src="/images/wechat.jpg">
+      <span class="reward-type">微信</span>
+    </div>
+    
+  </div>
+</div>
+    
+<script src="/js/jquery-3.6.0.min.js"></script>
+ 
+<script src="/js/lazyload.min.js"></script>
+
+<!-- Tocbot -->
+ 
+<script src="/js/tocbot.min.js"></script>
+
+<script>
+  tocbot.init({
+    tocSelector: ".tocbot",
+    contentSelector: ".article-entry",
+    headingSelector: "h1, h2, h3, h4, h5, h6",
+    hasInnerContainers: true,
+    scrollSmooth: true,
+    scrollContainer: "main",
+    positionFixedSelector: ".tocbot",
+    positionFixedClass: "is-position-fixed",
+    fixedSidebarOffset: "auto",
+  });
+</script>
+
+<script src="https://cdn.staticfile.org/jquery-modal/0.9.2/jquery.modal.min.js"></script>
+<link
+  rel="stylesheet"
+  href="https://cdn.staticfile.org/jquery-modal/0.9.2/jquery.modal.min.css"
+/>
+<script src="https://cdn.staticfile.org/justifiedGallery/3.8.1/js/jquery.justifiedGallery.min.js"></script>
+
+<script src="/dist/main.js"></script>
+
+<!-- ImageViewer -->
+ <!-- Root element of PhotoSwipe. Must have class pswp. -->
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    <!-- Background of PhotoSwipe. 
+         It's a separate element as animating opacity is faster than rgba(). -->
+    <div class="pswp__bg"></div>
+
+    <!-- Slides wrapper with overflow:hidden. -->
+    <div class="pswp__scroll-wrap">
+
+        <!-- Container that holds slides. 
+            PhotoSwipe keeps only 3 of them in the DOM to save memory.
+            Don't modify these 3 pswp__item elements, data is added later on. -->
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                <!--  Controls are self-explanatory. Order can be changed. -->
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" style="display:none" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
+                <!-- element will get class pswp__preloader--active when preloader is running -->
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<link rel="stylesheet" href="https://cdn.staticfile.org/photoswipe/4.1.3/photoswipe.min.css">
+<link rel="stylesheet" href="https://cdn.staticfile.org/photoswipe/4.1.3/default-skin/default-skin.min.css">
+<script src="https://cdn.staticfile.org/photoswipe/4.1.3/photoswipe.min.js"></script>
+<script src="https://cdn.staticfile.org/photoswipe/4.1.3/photoswipe-ui-default.min.js"></script>
+
+<script>
+    function viewer_init() {
+        let pswpElement = document.querySelectorAll('.pswp')[0];
+        let $imgArr = document.querySelectorAll(('.article-entry img:not(.reward-img)'))
+
+        $imgArr.forEach(($em, i) => {
+            $em.onclick = () => {
+                // slider展开状态
+                // todo: 这样不好，后面改成状态
+                if (document.querySelector('.left-col.show')) return
+                let items = []
+                $imgArr.forEach(($em2, i2) => {
+                    let img = $em2.getAttribute('data-idx', i2)
+                    let src = $em2.getAttribute('data-target') || $em2.getAttribute('src')
+                    let title = $em2.getAttribute('alt')
+                    // 获得原图尺寸
+                    const image = new Image()
+                    image.src = src
+                    items.push({
+                        src: src,
+                        w: image.width || $em2.width,
+                        h: image.height || $em2.height,
+                        title: title
+                    })
+                })
+                var gallery = new PhotoSwipe(pswpElement, PhotoSwipeUI_Default, items, {
+                    index: parseInt(i)
+                });
+                gallery.init()
+            }
+        })
+    }
+    viewer_init()
+</script> 
+<!-- MathJax -->
+
+<!-- Katex -->
+
+<!-- busuanzi  -->
+ 
+<script src="/js/busuanzi-2.3.pure.min.js"></script>
+ 
+<!-- ClickLove -->
+
+<!-- ClickBoom1 -->
+
+<!-- ClickBoom2 -->
+
+<!-- CodeCopy -->
+ 
+<link rel="stylesheet" href="/css/clipboard.css">
+ <script src="https://cdn.staticfile.org/clipboard.js/2.0.10/clipboard.min.js"></script>
+<script>
+  function wait(callback, seconds) {
+    var timelag = null;
+    timelag = window.setTimeout(callback, seconds);
+  }
+  !function (e, t, a) {
+    var initCopyCode = function(){
+      var copyHtml = '';
+      copyHtml += '<button class="btn-copy" data-clipboard-snippet="">';
+      copyHtml += '<i class="ri-file-copy-2-line"></i><span>COPY</span>';
+      copyHtml += '</button>';
+      $(".highlight .code pre").before(copyHtml);
+      $(".article pre code").before(copyHtml);
+      var clipboard = new ClipboardJS('.btn-copy', {
+        target: function(trigger) {
+          return trigger.nextElementSibling;
+        }
+      });
+      clipboard.on('success', function(e) {
+        let $btn = $(e.trigger);
+        $btn.addClass('copied');
+        let $icon = $($btn.find('i'));
+        $icon.removeClass('ri-file-copy-2-line');
+        $icon.addClass('ri-checkbox-circle-line');
+        let $span = $($btn.find('span'));
+        $span[0].innerText = 'COPIED';
+        
+        wait(function () { // 等待两秒钟后恢复
+          $icon.removeClass('ri-checkbox-circle-line');
+          $icon.addClass('ri-file-copy-2-line');
+          $span[0].innerText = 'COPY';
+        }, 2000);
+      });
+      clipboard.on('error', function(e) {
+        e.clearSelection();
+        let $btn = $(e.trigger);
+        $btn.addClass('copy-failed');
+        let $icon = $($btn.find('i'));
+        $icon.removeClass('ri-file-copy-2-line');
+        $icon.addClass('ri-time-line');
+        let $span = $($btn.find('span'));
+        $span[0].innerText = 'COPY FAILED';
+        
+        wait(function () { // 等待两秒钟后恢复
+          $icon.removeClass('ri-time-line');
+          $icon.addClass('ri-file-copy-2-line');
+          $span[0].innerText = 'COPY';
+        }, 2000);
+      });
+    }
+    initCopyCode();
+  }(window, document);
+</script>
+ 
+<!-- CanvasBackground -->
+ 
+<script src="/js/dz.js"></script>
+ 
+<script>
+  if (window.mermaid) {
+    mermaid.initialize({ theme: "forest" });
+  }
+</script>
+
+
+    
+    
+
+  </div>
+</body>
+
+</html>
